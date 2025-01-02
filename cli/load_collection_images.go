@@ -16,7 +16,7 @@ type collectionLoader struct {
 	mediaIn    chan *nft_proxy.Media
 }
 
-func main() {
+func loadCollectionImage() {
 	log.Printf("Loading collection images: %s", "TODO")
 
 	l := collectionLoader{

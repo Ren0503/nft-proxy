@@ -15,10 +15,10 @@ type SqliteService struct {
 	context.DefaultService
 	db *gorm.DB
 
-	username string
-	password string
+	// username string
+	// password string
 	database string
-	host     string
+	// host     string
 }
 
 const SQLITE_SVC = "sqlite_svc"
@@ -92,7 +92,15 @@ func (ds *SqliteService) Migrate(values ...interface{}) error {
 
 //Shutdown Gracefully close the database connection
 func (ds *SqliteService) Shutdown() {
-	//
+	conn, err := ds.db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get connection raw: %v", err)
+	}
+	err = conn.Close()
+	if err != nil {
+		log.Fatalf("Failed to close database connection: %v", err)
+	}
+	fmt.Println("Database connection closed")
 }
 
 // Parse an error returned from the database into a more contextual error that can be used with http response codes
@@ -105,10 +113,9 @@ func (ds *SqliteService) error(err error) error {
 
 	switch err {
 	case gorm.ErrRecordNotFound:
-		code = 404
-		break
+		code = http.StatusNotFound
 	default:
-		code = 500
+		code = http.StatusInternalServerError
 	}
 
 	log.Println(code) //TODO implement

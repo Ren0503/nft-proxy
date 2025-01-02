@@ -36,7 +36,7 @@ type HttpService struct {
 }
 
 var ErrUnauthorized = errors.New("unauthorized")
-var DeleteResponseOK = `{"status": 200, "error": ""}`
+var DeleteResponseOK = `{"status": http.StatusOk, "error": ""}`
 
 func (svc HttpService) Id() string {
 	return "http"
@@ -68,9 +68,9 @@ func (svc *HttpService) Start() error {
 	r.Use(gin.Recovery())
 
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
+	// config.AllowAllOrigins = true
 	config.AllowCredentials = true
-	config.AddAllowHeaders("Authorization")
+	config.AddAllowHeaders("Authorization", "Cache-Control", "Content-Encoding")
 	r.Use(cors.New(config))
 
 	//r.Static("static", "static")
@@ -83,24 +83,27 @@ func (svc *HttpService) Start() error {
 	v1 := r.Group("/v1")
 	//docs.SwaggerInfo.BasePath = "/v1"
 
-	v1.GET("tokens/:id", svc.showNFT)
-	v1.GET("tokens/:id/image", svc.showNFTImage)
-	v1.GET("tokens/:id/image.gif", svc.showNFTImage)
-	v1.GET("tokens/:id/image.png", svc.showNFTImage)
-	v1.GET("tokens/:id/image.jpg", svc.showNFTImage)
-	v1.GET("tokens/:id/image.jpeg", svc.showNFTImage)
-	v1.GET("tokens/:id/media", svc.showNFTMedia)
+	v1 := r.Group("v1")
+	tokenRoute := v1.Group("tokens")
+	tokenRoute.GET(":id", svc.showNFT)
+	tokenRoute.GET(":id/image", ValidIdMiddleware(), svc.showNFTImage)
+	tokenRoute.GET(":id/image.gif", ValidIdMiddleware(), svc.showNFTImage)
+	tokenRoute.GET(":id/image.png", ValidIdMiddleware(), svc.showNFTImage)
+	tokenRoute.GET(":id/image.jpg", ValidIdMiddleware(), svc.showNFTImage)
+	tokenRoute.GET(":id/image.jpeg", ValidIdMiddleware(), svc.showNFTImage)
+	tokenRoute.GET(":id/media", ValidIdMiddleware(), svc.showNFTMedia)
 
-	v1.GET("nfts/:id", svc.showNFT)
-	v1.GET("nfts/:id/image", svc.showNFTImage)
-	v1.GET("nfts/:id/image.gif", svc.showNFTImage)
-	v1.GET("nfts/:id/image.png", svc.showNFTImage)
-	v1.GET("nfts/:id/image.jpg", svc.showNFTImage)
-	v1.GET("nfts/:id/image.jpeg", svc.showNFTImage)
-	v1.GET("nfts/:id/media", svc.showNFTMedia)
+	nftRoute := v1.Group("nfts")
+	nftRoute.GET(":id", svc.showNFT)
+	nftRoute.GET(":id/image", ValidIdMiddleware(), svc.showNFTImage)
+	nftRoute.GET(":id/image.gif", ValidIdMiddleware(), svc.showNFTImage)
+	nftRoute.GET(":id/image.png", ValidIdMiddleware(), svc.showNFTImage)
+	nftRoute.GET(":id/image.jpg", ValidIdMiddleware(), svc.showNFTImage)
+	nftRoute.GET(":id/image.jpeg", ValidIdMiddleware(), svc.showNFTImage)
+	nftRoute.GET(":id/media", ValidIdMiddleware(), svc.showNFTMedia)
 
 	r.NoRoute(func(c *gin.Context) {
-		c.JSON(404, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
+		c.JSON(http.StatusNotFound, gin.H{"code": "PAGE_NOT_FOUND", "message": "Page not found"})
 	})
 
 	return r.Run(fmt.Sprintf(":%v", svc.Port))
@@ -115,7 +118,7 @@ type Pong struct {
 // @Produce json
 // @Router /ping [get]
 func (svc *HttpService) ping(c *gin.Context) {
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOk, gin.H{
 		"message": "pong",
 	})
 }
@@ -131,7 +134,7 @@ func (svc *HttpService) stats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, stats)
+	c.JSON(http.StatusOk, stats)
 }
 
 // @Summary Ping liquify service
@@ -141,7 +144,8 @@ func (svc *HttpService) stats(c *gin.Context) {
 func (svc *HttpService) showNFT(c *gin.Context) {
 	svc.statSvc.IncrementMediaRequests()
 
-	skipCache, _ := strconv.ParseBool(c.DefaultQuery("nocache", ""))
+	cacheControl := c.GetHeader("Cache-Control")
+	skipCache := strings.Contains(cacheControl, "no-cache")
 	if skipCache || rand.Intn(1000) == 1 {
 		if err := svc.imgSvc.ClearCache(c.Param("id")); err != nil {
 			svc.paramErr(c, err)
@@ -158,7 +162,7 @@ func (svc *HttpService) showNFT(c *gin.Context) {
 	c.Header("Cache-Control", "public, max-age=172800")
 	c.Header("Expires", time.Now().AddDate(0, 0, 2).Format(http.TimeFormat))
 
-	c.JSON(200, media)
+	c.JSON(http.StatusOk, media)
 }
 
 // @Summary Ping liquify service
@@ -197,9 +201,23 @@ func (svc *HttpService) paramErr(c *gin.Context, err error) {
 func (svc *HttpService) mediaError(c *gin.Context, err error) {
 	log.Printf("Media Err: %s", err)
 
-	c.Header("Cache-Control", "public, max=age=60") //Stop flooding
-	c.Data(200, "image/jpeg", svc.defaultImage)
-	//c.JSON(200, gin.H{
+	c.Header("Cache-Control", "public, max-age=60") //Stop flooding
+	c.Data(http.StatusOk, "image/jpeg", svc.defaultImage)
+	//c.JSON(http.StatusOk, gin.H{
 	//	"error": err.Error(),
 	//})
+}
+
+func ValidIdMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := c.Param("id")
+		if !IsSolKey(key) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": errors.New("unsupported chain"),
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }

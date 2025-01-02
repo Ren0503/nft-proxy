@@ -42,8 +42,12 @@ func (svc *StatService) IncrementMediaRequests() {
 
 func (svc *StatService) ServiceStats() (map[string]interface{}, error) {
 	var imgCount int64
-	svc.sql.Db().Model(&nft_proxy.SolanaMedia{}).Count(&imgCount)
 
+	result := svc.sql.Db().Model(&nft_proxy.SolanaMedia{}).Count(&imgCount)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	
 	return map[string]interface{}{
 		"images_stored":      imgCount,
 		"requests_served":    svc.requestsServed,

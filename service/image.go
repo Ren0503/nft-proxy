@@ -60,7 +60,7 @@ func (svc *ImageService) Start() error {
 }
 
 func (svc *ImageService) Media(key string, skipCache bool) (*nft_proxy.Media, error) {
-	if svc.IsSolKey(key) {
+	if IsSolKey(key) {
 		return svc.solSvc.Media(key, skipCache)
 	}
 
@@ -68,19 +68,10 @@ func (svc *ImageService) Media(key string, skipCache bool) (*nft_proxy.Media, er
 }
 
 func (svc *ImageService) ImageFile(c *gin.Context, key string) error {
-	var err error
-
-	//Fetch the image file to see if its already in the system
-	var media *nft_proxy.Media
-	if svc.IsSolKey(key) {
-		media, err = svc.solSvc.Media(key, false)
-		if err != nil {
-			return err
-		}
-	} else {
-		return errors.New("unsupported chain")
+	media, err := svc.solSvc.Media(key, false)
+	if err != nil {
+		return err
 	}
-
 	cacheName := fmt.Sprintf("./cache/solana/%s.%s", media.Mint, media.ImageType)
 
 	//Check for file or fetch
@@ -125,12 +116,15 @@ func (svc *ImageService) writeFile(c *gin.Context, path string, media *nft_proxy
 	defer file.Close()
 
 	ifo, err := file.Stat()
+	if err != nil {
+		return err
+	}
 	modTime := time.Now()
 	if ifo != nil {
 		modTime = ifo.ModTime()
 	}
 
-	c.Header("Cache-Control", "public, max=age=172800")
+	c.Header("Cache-Control", "public, max-age=172800")
 	c.Header("Vary", "Accept-Encoding")
 	c.Header("Last-Modified", modTime.Format("Mon, 02 Jan 2006 15:04:05 GMT")) //Mon, 03 Jun 2020 11:35:28 GMT
 	c.Header("Content-Type", fmt.Sprintf("image/%s", media.ImageType))
@@ -211,7 +205,7 @@ func (svc *ImageService) fetchMissingImage(media *nft_proxy.Media, cacheName str
 func (svc *ImageService) MediaFile(c *gin.Context, key string) error {
 	var media *nft_proxy.Media
 	var err error
-	if svc.IsSolKey(key) {
+	if IsSolKey(key) {
 		media, err = svc.solSvc.Media(key, false)
 		if err != nil {
 			return err
@@ -239,7 +233,7 @@ func (svc *ImageService) MediaFile(c *gin.Context, key string) error {
 	return nil
 }
 
-func (svc *ImageService) IsSolKey(key string) bool {
+func IsSolKey(key string) bool {
 	_, err := solana.PublicKeyFromBase58(key)
 	return err == nil
 }

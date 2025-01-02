@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func init() {
+func reloadHashlist() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")

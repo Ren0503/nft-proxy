@@ -37,6 +37,9 @@ func (asset *Asset) UnmarshalWithDecoder(dec *bin.Decoder) (err error) {
 	}
 
 	size, err := dec.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return err
+	}
 	_n, err := dec.ReadBytes(int(size))
 	if err != nil {
 		return err
@@ -44,6 +47,9 @@ func (asset *Asset) UnmarshalWithDecoder(dec *bin.Decoder) (err error) {
 	asset.Name = string(_n)
 
 	size, err = dec.ReadUint32(binary.LittleEndian)
+	if err != nil {
+		return err
+	}
 	_uri, err := dec.ReadBytes(int(size))
 	if err != nil {
 		return err

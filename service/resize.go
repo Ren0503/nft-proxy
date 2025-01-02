@@ -46,8 +46,17 @@ func (svc *ResizeService) Resize(data []byte, out io.Writer, size int) error {
 		return gif.EncodeAll(out, g2)
 	}
 
+	bounds := src.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	var dst image.Image
 	// Resize:
-	dst := resize.Resize(0, uint(size), src, resize.MitchellNetravali)
+	if width > size || height > size {
+		dst = resize.Resize(uint(size), uint(size), src, resize.MitchellNetravali)
+	} else {
+		dst = src
+	}
 
 	switch typ {
 	case "png":
